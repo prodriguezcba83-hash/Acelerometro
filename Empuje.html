@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<title>Medidor de Empuje</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #0a0c0e;
+    --panel: #14171b;
+    --panel-line: #23282e;
+    --amber: #ffb020;
+    --amber-dim: #7a5518;
+    --cyan: #38e1c7;
+    --cyan-dim: #1c6e62;
+    --ink: #edeff2;
+    --ink-dim: #6b7280;
+    --danger: #ff4d4d;
+  }
+  *{ box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body{ height: 100%; }
+  body{
+    margin:0;
+    background: radial-gradient(120% 140% at 50% -10%, #171a1e 0%, var(--bg) 55%);
+    color: var(--ink);
+    font-family: 'Inter', sans-serif;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    min-height: 100dvh;
+    padding: 18px;
+    overscroll-behavior: none;
+    user-select: none;
+  }
+  .stage{
+    width: 100%;
+    max-width: 480px;
+  }
+  .eyebrow{
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    padding: 0 4px 14px;
+    border-bottom: 1px solid var(--panel-line);
+    margin-bottom: 22px;
+  }
+  .eyebrow .tag{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    color: var(--ink-dim);
+    text-transform: uppercase;
+  }
+  .eyebrow .tag b{ color: var(--amber); font-weight:600; }
+  .eyebrow .state-dot{
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--ink-dim);
+    box-shadow: none;
+    transition: all .3s ease;
+  }
+  .eyebrow .state-dot.live{
+    background: var(--cyan);
+    box-shadow: 0 0 10px 2px rgba(56,225,199,0.6);
+  }
+
+  .gforce-display{
+    text-align:center;
+    padding: 6px 0 2px;
+  }
+  .g-value{
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 800;
+    font-size: min(26vw, 128px);
+    line-height: 0.85;
+    letter-spacing: -0.01em;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink);
+    text-shadow: 0 0 40px rgba(255,176,32,0.0);
+    transition: color .15s ease, text-shadow .15s ease;
+  }
+  .g-value.pos{ color: var(--amber); text-shadow: 0 0 34px rgba(255,176,32,0.35); }
+  .g-value.neg{ color: var(--cyan); text-shadow: 0 0 34px rgba(56,225,199,0.32); }
+  .g-unit{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 14px;
+    letter-spacing: 0.3em;
+    color: var(--ink-dim);
+    margin-top: -6px;
+    text-transform: uppercase;
+  }
+
+  .secondary-stats{
+    display:grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1px;
+    background: var(--panel-line);
+    border: 1px solid var(--panel-line);
+    border-radius: 10px;
+    overflow:hidden;
+    margin: 22px 0 26px;
+  }
+  .stat{
+    background: var(--panel);
+    padding: 12px 6px;
+    text-align:center;
+  }
+  .stat-label{
+    display:block;
+    font-family:'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+    margin-bottom: 4px;
+  }
+  .stat-value{
+    display:block;
+    font-family:'JetBrains Mono', monospace;
+    font-size: 17px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink);
+  }
+  .stat-value.accel{ color: var(--amber); }
+  .stat-value.brake{ color: var(--cyan); }
+
+  .push-strip-wrap{ margin-bottom: 26px; }
+  .push-strip{
+    position: relative;
+    height: 46px;
+    background: var(--panel);
+    border: 1px solid var(--panel-line);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .push-strip .center-line{
+    position:absolute; top:0; bottom:0; left:50%;
+    width:1px; background: var(--panel-line);
+  }
+  .push-strip .tick{
+    position:absolute; top:0; bottom:0; width:1px; background: rgba(255,255,255,0.05);
+  }
+  .push-strip .fill{
+    position:absolute; top:6px; bottom:6px; left:50%;
+    width: 0%;
+    border-radius: 4px;
+    transition: none;
+  }
+  .push-strip .fill.pos{ background: linear-gradient(90deg, rgba(255,176,32,0.1), var(--amber)); }
+  .push-strip .fill.neg{ background: linear-gradient(90deg, var(--cyan), rgba(56,225,199,0.1)); right:50%; left:auto; }
+  .push-strip .dot{
+    position:absolute; top:50%; left:50%;
+    width: 14px; height: 14px; margin:-7px 0 0 -7px;
+    border-radius:50%;
+    background: var(--ink);
+    box-shadow: 0 0 12px 2px rgba(255,255,255,0.4);
+    transition: left .06s linear;
+  }
+  .push-strip .peak-mark{
+    position:absolute; top:0; bottom:0; width:2px;
+    opacity: 0.9;
+  }
+  .peak-mark.accel-mark{ background: var(--amber); }
+  .peak-mark.brake-mark{ background: var(--cyan); }
+  .strip-labels{
+    display:flex; justify-content:space-between;
+    font-family:'JetBrains Mono', monospace;
+    font-size: 10px; letter-spacing: 0.1em;
+    color: var(--ink-dim);
+    padding: 6px 2px 0;
+  }
+  .strip-labels span:first-child{ color: var(--cyan); }
+  .strip-labels span:last-child{ color: var(--amber); }
+
+  .controls{
+    display:grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  button{
+    font-family:'Inter', sans-serif;
+    font-weight: 600;
+    font-size: 15px;
+    padding: 14px 10px;
+    border-radius: 9px;
+    border: 1px solid var(--panel-line);
+    background: var(--panel);
+    color: var(--ink);
+    cursor: pointer;
+  }
+  button#startBtn{
+    background: var(--amber);
+    border-color: var(--amber);
+    color: #1a1200;
+  }
+  button#startBtn.stop{
+    background: var(--danger);
+    border-color: var(--danger);
+    color: #2a0000;
+  }
+  button:disabled{
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
+  button:active:not(:disabled){ transform: scale(0.98); }
+
+  .status{
+    text-align:center;
+    font-family:'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--ink-dim);
+    letter-spacing: 0.02em;
+    min-height: 32px;
+    padding: 0 6px;
+  }
+  .status.warn{ color: var(--danger); }
+</style>
+</head>
+<body>
+  <div class="stage">
+    <div class="eyebrow">
+      <span class="tag">Medidor de <b>empuje</b></span>
+      <span class="state-dot" id="stateDot"></span>
+    </div>
+
+    <div class="gforce-display">
+      <div class="g-value" id="gValue">0.00</div>
+      <div class="g-unit">g</div>
+    </div>
+
+    <div class="secondary-stats">
+      <div class="stat">
+        <span class="stat-label">m/s²</span>
+        <span class="stat-value" id="msValue">0.0</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">pico accel</span>
+        <span class="stat-value accel" id="peakAccel">0.00</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">pico freno</span>
+        <span class="stat-value brake" id="peakBrake">0.00</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">tiempo</span>
+        <span class="stat-value" id="elapsed">00:00.0</span>
+      </div>
+    </div>
+
+    <div class="push-strip-wrap">
+      <div class="push-strip" id="pushStrip">
+        <div class="center-line"></div>
+        <div class="fill pos" id="fillPos"></div>
+        <div class="fill neg" id="fillNeg"></div>
+        <div class="peak-mark accel-mark" id="markAccel" style="display:none;"></div>
+        <div class="peak-mark brake-mark" id="markBrake" style="display:none;"></div>
+        <div class="dot" id="dot"></div>
+      </div>
+      <div class="strip-labels"><span>FRENA</span><span>0</span><span>ACELERA</span></div>
+    </div>
+
+    <div class="controls">
+      <button id="startBtn">Iniciar</button>
+      <button id="resetBtn" disabled>Reiniciar</button>
+    </div>
+
+    <div class="status" id="status">Tocá "Iniciar" con el auto detenido.</div>
+  </div>
+
+<script>
+(function(){
+  const gValueEl = document.getElementById('gValue');
+  const msValueEl = document.getElementById('msValue');
+  const peakAccelEl = document.getElementById('peakAccel');
+  const peakBrakeEl = document.getElementById('peakBrake');
+  const elapsedEl = document.getElementById('elapsed');
+  const statusEl = document.getElementById('status');
+  const startBtn = document.getElementById('startBtn');
+  const resetBtn = document.getElementById('resetBtn');
+  const stateDot = document.getElementById('stateDot');
+  const dot = document.getElementById('dot');
+  const fillPos = document.getElementById('fillPos');
+  const fillNeg = document.getElementById('fillNeg');
+  const markAccel = document.getElementById('markAccel');
+  const markBrake = document.getElementById('markBrake');
+
+  const G = 9.80665;
+  const ALPHA = 0.18;          // suavizado exponencial
+  const STRIP_MAX_G = 0.9;     // g que corresponde al borde de la franja
+
+  let phase = 'idle';          // idle -> zeroing -> locking -> running
+  let bias = {x:0,y:0,z:0};
+  let biasSamples = [];
+  let axisSums = {x:0,y:0,z:0};
+  let lockedAxis = null;
+  let lockedSign = 1;
+  let smoothed = {x:0,y:0,z:0};
+  let peakAccel = 0, peakBrake = 0;
+  let startTime = null;
+  let motionDetected = false;
+  let timerInterval = null;
+  let phaseTimeout = null;
+
+  function fmtElapsed(ms){
+    const totalTenths = Math.floor(ms/100);
+    const tenths = totalTenths % 10;
+    const totalSeconds = Math.floor(totalTenths/10);
+    const s = totalSeconds % 60;
+    const m = Math.floor(totalSeconds/60);
+    return String(m).padStart(2,'0')+':'+String(s).padStart(2,'0')+'.'+tenths;
+  }
+
+  function setStatus(text, warn){
+    statusEl.textContent = text;
+    statusEl.classList.toggle('warn', !!warn);
+  }
+
+  function resetAll(){
+    phase = 'idle';
+    bias = {x:0,y:0,z:0};
+    biasSamples = [];
+    axisSums = {x:0,y:0,z:0};
+    lockedAxis = null;
+    lockedSign = 1;
+    smoothed = {x:0,y:0,z:0};
+    peakAccel = 0; peakBrake = 0;
+    startTime = null;
+    motionDetected = false;
+    clearInterval(timerInterval);
+    clearTimeout(phaseTimeout);
+    gValueEl.textContent = '0.00';
+    gValueEl.className = 'g-value';
+    msValueEl.textContent = '0.0';
+    peakAccelEl.textContent = '0.00';
+    peakBrakeEl.textContent = '0.00';
+    elapsedEl.textContent = '00:00.0';
+    dot.style.left = '50%';
+    fillPos.style.width = '0%';
+    fillNeg.style.width = '0%';
+    markAccel.style.display = 'none';
+    markBrake.style.display = 'none';
+    stateDot.classList.remove('live');
+    startBtn.textContent = 'Iniciar';
+    startBtn.classList.remove('stop');
+    startBtn.disabled = false;
+    resetBtn.disabled = true;
+    setStatus('Tocá "Iniciar" con el auto detenido.');
+  }
+
+  function beginZeroing(){
+    phase = 'zeroing';
+    biasSamples = [];
+    setStatus('Calibrando cero — no muevas el auto…');
+    phaseTimeout = setTimeout(() => {
+      if (biasSamples.length === 0){
+        setStatus('No se detectaron sensores de movimiento en este navegador.', true);
+        stopToIdleButKeepMessage();
+        return;
+      }
+      bias.x = biasSamples.reduce((a,s)=>a+s.x,0)/biasSamples.length;
+      bias.y = biasSamples.reduce((a,s)=>a+s.y,0)/biasSamples.length;
+      bias.z = biasSamples.reduce((a,s)=>a+s.z,0)/biasSamples.length;
+      beginAxisLock();
+    }, 1000);
+  }
+
+  function beginAxisLock(){
+    phase = 'locking';
+    axisSums = {x:0,y:0,z:0};
+    motionDetected = false;
+    setStatus('Arrancá suave para calibrar el eje de marcha (3s)…');
+    phaseTimeout = setTimeout(() => {
+      const absSums = {x:Math.abs(axisSums.x), y:Math.abs(axisSums.y), z:Math.abs(axisSums.z)};
+      const best = Object.keys(absSums).reduce((a,b)=> absSums[a] >= absSums[b] ? a : b);
+      if (!motionDetected || absSums[best] < 1.0){
+        setStatus('No detecté movimiento suficiente. Tocá "Iniciar" de nuevo y acelerá un poco.', true);
+        stopToIdleButKeepMessage();
+        return;
+      }
+      lockedAxis = best;
+      lockedSign = axisSums[best] >= 0 ? 1 : -1;
+      startRunning();
+    }, 3000);
+  }
+
+  function startRunning(){
+    phase = 'running';
+    startTime = performance.now();
+    stateDot.classList.add('live');
+    setStatus('Midiendo. Frená o acelerá con normalidad.');
+    timerInterval = setInterval(() => {
+      elapsedEl.textContent = fmtElapsed(performance.now() - startTime);
+    }, 100);
+  }
+
+  function stopToIdleButKeepMessage(){
+    clearTimeout(phaseTimeout);
+    clearInterval(timerInterval);
+    phase = 'idle';
+    startBtn.textContent = 'Iniciar';
+    startBtn.classList.remove('stop');
+    startBtn.disabled = false;
+    resetBtn.disabled = true;
+    stateDot.classList.remove('live');
+  }
+
+  function updateStrip(gSigned){
+    const pct = Math.max(-1, Math.min(1, gSigned / STRIP_MAX_G)) * 50;
+    dot.style.left = (50 + pct) + '%';
+    if (pct >= 0){
+      fillPos.style.width = pct + '%';
+      fillNeg.style.width = '0%';
+    } else {
+      fillNeg.style.width = (-pct) + '%';
+      fillPos.style.width = '0%';
+    }
+  }
+
+  function updatePeakMarks(){
+    const accelPct = Math.max(0, Math.min(1, peakAccel / STRIP_MAX_G)) * 50;
+    const brakePct = Math.max(0, Math.min(1, peakBrake / STRIP_MAX_G)) * 50;
+    if (peakAccel > 0.03){
+      markAccel.style.display = 'block';
+      markAccel.style.left = (50 + accelPct) + '%';
+    }
+    if (peakBrake > 0.03){
+      markBrake.style.display = 'block';
+      markBrake.style.left = (50 - brakePct) + '%';
+    }
+  }
+
+  function handleMotion(evt){
+    const a = evt.acceleration;
+    if (!a || a.x === null || a.x === undefined) return;
+
+    if (phase === 'zeroing'){
+      biasSamples.push({x:a.x, y:a.y, z:a.z});
+      return;
+    }
+
+    if (phase === 'locking'){
+      const dx = a.x - bias.x, dy = a.y - bias.y, dz = a.z - bias.z;
+      axisSums.x += dx; axisSums.y += dy; axisSums.z += dz;
+      if (Math.abs(dx) > 0.6 || Math.abs(dy) > 0.6 || Math.abs(dz) > 0.6) motionDetected = true;
+      return;
+    }
+
+    if (phase !== 'running') return;
+
+    const raw = { x:a.x - bias.x, y:a.y - bias.y, z:a.z - bias.z };
+    smoothed.x = ALPHA*raw.x + (1-ALPHA)*smoothed.x;
+    smoothed.y = ALPHA*raw.y + (1-ALPHA)*smoothed.y;
+    smoothed.z = ALPHA*raw.z + (1-ALPHA)*smoothed.z;
+
+    const ms2 = smoothed[lockedAxis] * lockedSign;
+    const gSigned = ms2 / G;
+
+    gValueEl.textContent = (gSigned >= 0 ? gSigned.toFixed(2) : gSigned.toFixed(2));
+    gValueEl.className = 'g-value' + (gSigned > 0.02 ? ' pos' : (gSigned < -0.02 ? ' neg' : ''));
+    msValueEl.textContent = ms2.toFixed(1);
+
+    if (gSigned > peakAccel){ peakAccel = gSigned; peakAccelEl.textContent = peakAccel.toFixed(2); }
+    if (-gSigned > peakBrake){ peakBrake = -gSigned; peakBrakeEl.textContent = peakBrake.toFixed(2); }
+
+    updateStrip(gSigned);
+    updatePeakMarks();
+  }
+
+  async function requestPermissionIfNeeded(){
+    if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function'){
+      try{
+        const res = await DeviceMotionEvent.requestPermission();
+        return res === 'granted';
+      }catch(e){
+        return false;
+      }
+    }
+    return true;
+  }
+
+  let listenerAttached = false;
+  function attachListener(){
+    if (listenerAttached) return;
+    window.addEventListener('devicemotion', handleMotion);
+    listenerAttached = true;
+  }
+
+  startBtn.addEventListener('click', async () => {
+    if (phase === 'idle'){
+      const granted = await requestPermissionIfNeeded();
+      if (!granted){
+        setStatus('Permiso de sensores denegado. Habilitalo en la configuración del navegador.', true);
+        return;
+      }
+      attachListener();
+      startBtn.disabled = true;
+      resetBtn.disabled = false;
+      startBtn.textContent = 'Midiendo…';
+      startBtn.classList.add('stop');
+      beginZeroing();
+    }
+  });
+
+  resetBtn.addEventListener('click', resetAll);
+
+  resetAll();
+})();
+</script>
+</body>
+</html>
