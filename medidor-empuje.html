@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<title>Medidor de Empuje</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #0a0c0e;
+    --panel: #14171b;
+    --panel-line: #23282e;
+    --amber: #ffb020;
+    --cyan: #38e1c7;
+    --ink: #edeff2;
+    --ink-dim: #6b7280;
+    --danger: #ff4d4d;
+  }
+  *{ box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body{ height: 100%; }
+  body{
+    margin:0;
+    background: radial-gradient(120% 140% at 50% -10%, #171a1e 0%, var(--bg) 55%);
+    color: var(--ink);
+    font-family: 'Inter', sans-serif;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    min-height: 100dvh;
+    padding: 18px;
+    overscroll-behavior: none;
+    user-select: none;
+  }
+  .stage{ width: 100%; max-width: 460px; }
+
+  .eyebrow{
+    display:flex; align-items:baseline; justify-content:space-between;
+    padding: 0 4px 14px;
+    border-bottom: 1px solid var(--panel-line);
+    margin-bottom: 18px;
+  }
+  .eyebrow .tag{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 11px; letter-spacing: 0.18em;
+    color: var(--ink-dim); text-transform: uppercase;
+  }
+  .eyebrow .tag b{ color: var(--amber); font-weight:600; }
+  .eyebrow .state-dot{
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--ink-dim);
+    transition: all .3s ease;
+  }
+  .eyebrow .state-dot.live{
+    background: var(--cyan);
+    box-shadow: 0 0 10px 2px rgba(56,225,199,0.6);
+  }
+
+  .gauge-wrap{
+    position: relative;
+    padding: 8px 0 0;
+  }
+  .gauge-wrap svg{ width: 100%; height: auto; display:block; overflow: visible; }
+
+  .gauge-label{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    fill: var(--ink-dim);
+    text-anchor: middle;
+  }
+  .gauge-label.accel{ fill: var(--amber); }
+  .gauge-label.brake{ fill: var(--cyan); }
+
+  .needle{
+    stroke: var(--ink);
+    stroke-width: 3.5;
+    stroke-linecap: round;
+    transition: stroke 0.15s ease;
+  }
+  .needle.pos{ stroke: var(--amber); filter: drop-shadow(0 0 6px rgba(255,176,32,0.55)); }
+  .needle.neg{ stroke: var(--cyan); filter: drop-shadow(0 0 6px rgba(56,225,199,0.5)); }
+
+  .digital-g{
+    text-align:center;
+    margin-top: -14px;
+  }
+  .digital-g .val{
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 700;
+    font-size: 34px;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink);
+  }
+  .digital-g .val.pos{ color: var(--amber); }
+  .digital-g .val.neg{ color: var(--cyan); }
+  .digital-g .unit{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.25em;
+    color: var(--ink-dim);
+    margin-left: 4px;
+  }
+
+  .secondary-stats{
+    display:grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1px;
+    background: var(--panel-line);
+    border: 1px solid var(--panel-line);
+    border-radius: 10px;
+    overflow:hidden;
+    margin: 20px 0 22px;
+  }
+  .stat{ background: var(--panel); padding: 12px 6px; text-align:center; }
+  .stat-label{
+    display:block;
+    font-family:'JetBrains Mono', monospace;
+    font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--ink-dim); margin-bottom: 4px;
+  }
+  .stat-value{
+    display:block;
+    font-family:'JetBrains Mono', monospace;
+    font-size: 17px; font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink);
+  }
+  .stat-value.accel{ color: var(--amber); }
+  .stat-value.brake{ color: var(--cyan); }
+
+  .controls{
+    display:grid; grid-template-columns: 1fr 1fr; gap: 10px;
+    margin-bottom: 14px;
+  }
+  button{
+    font-family:'Inter', sans-serif; font-weight: 600; font-size: 15px;
+    padding: 14px 10px; border-radius: 9px;
+    border: 1px solid var(--panel-line);
+    background: var(--panel); color: var(--ink);
+    cursor: pointer;
+  }
+  button#startBtn{ background: var(--amber); border-color: var(--amber); color: #1a1200; }
+  button#startBtn.stop{ background: var(--danger); border-color: var(--danger); color: #2a0000; }
+  button:disabled{ opacity: 0.35; cursor: not-allowed; }
+  button:active:not(:disabled){ transform: scale(0.98); }
+
+  .status{
+    text-align:center;
+    font-family:'JetBrains Mono', monospace;
+    font-size: 12px; color: var(--ink-dim);
+    min-height: 32px; padding: 0 6px;
+  }
+  .status.warn{ color: var(--danger); }
+
+  .sens-row{
+    display:flex; align-items:center; justify-content:center; gap:8px;
+    margin-bottom: 16px;
+    font-family:'JetBrains Mono', monospace;
+    font-size: 11px; color: var(--ink-dim);
+  }
+  .sens-row input[type=range]{ width: 140px; accent-color: var(--amber); }
+</style>
+</head>
+<body>
+  <div class="stage">
+    <div class="eyebrow">
+      <span class="tag">Medidor de <b>empuje</b></span>
+      <span class="state-dot" id="stateDot"></span>
+    </div>
+
+    <div class="gauge-wrap">
+      <svg viewBox="0 0 220 130">
+        <path d="M 20.73 87.51 A 95 95 0 0 1 199.27 87.51" fill="none" stroke="#23282e" stroke-width="3" stroke-linecap="round"/>
+        <g id="ticks"></g>
+        <text x="30" y="112" class="gauge-label brake">FRENA</text>
+        <text x="110" y="118" class="gauge-label">0</text>
+        <text x="190" y="112" class="gauge-label accel">ACELERA</text>
+        <line id="needle" class="needle" x1="110" y1="120" x2="110" y2="34"/>
+        <circle cx="110" cy="120" r="7" fill="#0a0c0e" stroke="var(--ink-dim)" stroke-width="2"/>
+      </svg>
+    </div>
+    <div class="digital-g">
+      <span class="val" id="gValue">0.00</span><span class="unit">g</span>
+    </div>
+
+    <div class="secondary-stats">
+      <div class="stat"><span class="stat-label">m/s²</span><span class="stat-value" id="msValue">0.0</span></div>
+      <div class="stat"><span class="stat-label">pico accel</span><span class="stat-value accel" id="peakAccel">0.00</span></div>
+      <div class="stat"><span class="stat-label">pico freno</span><span class="stat-value brake" id="peakBrake">0.00</span></div>
+      <div class="stat"><span class="stat-label">tiempo</span><span class="stat-value" id="elapsed">00:00.0</span></div>
+    </div>
+
+    <div class="sens-row">
+      <span>menos sensible</span>
+      <input type="range" id="deadzoneSlider" min="0.01" max="0.15" step="0.01" value="0.05">
+      <span>más sensible</span>
+    </div>
+
+    <div class="controls">
+      <button id="startBtn">Iniciar</button>
+      <button id="resetBtn" disabled>Reiniciar</button>
+    </div>
+
+    <div class="status" id="status">Tocá "Iniciar" con el auto detenido.</div>
+  </div>
+
+<script>
+(function(){
+  const gValueEl = document.getElementById('gValue');
+  const msValueEl = document.getElementById('msValue');
+  const peakAccelEl = document.getElementById('peakAccel');
+  const peakBrakeEl = document.getElementById('peakBrake');
+  const elapsedEl = document.getElementById('elapsed');
+  const statusEl = document.getElementById('status');
+  const startBtn = document.getElementById('startBtn');
+  const resetBtn = document.getElementById('resetBtn');
+  const stateDot = document.getElementById('stateDot');
+  const needle = document.getElementById('needle');
+  const ticksGroup = document.getElementById('ticks');
+  const deadzoneSlider = document.getElementById('deadzoneSlider');
+
+  const G = 9.80665;
+  const ALPHA = 0.10;          // suavizado exponencial (más bajo = menos ruido, más lag)
+  const GAUGE_MAX_G = 1.0;     // g que corresponde al extremo de la aguja
+  const SWEEP_DEG = 68;        // grados desde el centro (0g) hasta cada extremo
+  const CX = 110, CY = 120, R_NEEDLE = 86, R_TICK_OUT = 95, R_TICK_IN = 86;
+
+  let deadzone = parseFloat(deadzoneSlider.value);
+  deadzoneSlider.addEventListener('input', () => { deadzone = parseFloat(deadzoneSlider.value); });
+
+  // --- dibujar ticks del dial (cada 0.25g) ---
+  function polar(cx, cy, r, thetaDeg){
+    const t = thetaDeg * Math.PI / 180;
+    return { x: cx + r * Math.sin(t), y: cy - r * Math.cos(t) };
+  }
+  [-1, -0.75, -0.5, -0.25, 0, 0.25, 0.5, 0.75, 1].forEach(f => {
+    const theta = f * SWEEP_DEG;
+    const p1 = polar(CX, CY, R_TICK_IN, theta);
+    const p2 = polar(CX, CY, R_TICK_OUT, theta);
+    const major = (f === 0 || Math.abs(f) === 1 || Math.abs(f) === 0.5);
+    const line = document.createElementNS('http://www.w3.org/2000/svg','line');
+    line.setAttribute('x1', p1.x); line.setAttribute('y1', p1.y);
+    line.setAttribute('x2', p2.x); line.setAttribute('y2', p2.y);
+    line.setAttribute('stroke', f === 0 ? '#8a8f98' : (f > 0 ? '#7a5518' : '#1c6e62'));
+    line.setAttribute('stroke-width', major ? 2.5 : 1.5);
+    ticksGroup.appendChild(line);
+  });
+
+  let phase = 'idle';
+  let bias = {x:0,y:0,z:0};
+  let biasSamples = [];
+  let axisSums = {x:0,y:0,z:0};
+  let lockedAxis = null;
+  let lockedSign = 1;
+  let smoothed = {x:0,y:0,z:0};
+  let peakAccel = 0, peakBrake = 0;
+  let startTime = null;
+  let motionDetected = false;
+  let timerInterval = null;
+  let phaseTimeout = null;
+
+  function fmtElapsed(ms){
+    const totalTenths = Math.floor(ms/100);
+    const tenths = totalTenths % 10;
+    const totalSeconds = Math.floor(totalTenths/10);
+    const s = totalSeconds % 60;
+    const m = Math.floor(totalSeconds/60);
+    return String(m).padStart(2,'0')+':'+String(s).padStart(2,'0')+'.'+tenths;
+  }
+
+  function setStatus(text, warn){
+    statusEl.textContent = text;
+    statusEl.classList.toggle('warn', !!warn);
+  }
+
+  function setNeedle(gForDisplay){
+    const clamped = Math.max(-GAUGE_MAX_G, Math.min(GAUGE_MAX_G, gForDisplay));
+    const theta = (clamped / GAUGE_MAX_G) * SWEEP_DEG;
+    needle.setAttribute('transform', `rotate(${theta} ${CX} ${CY})`);
+    needle.classList.toggle('pos', gForDisplay > 0.02);
+    needle.classList.toggle('neg', gForDisplay < -0.02);
+  }
+
+  function resetAll(){
+    phase = 'idle';
+    bias = {x:0,y:0,z:0};
+    biasSamples = [];
+    axisSums = {x:0,y:0,z:0};
+    lockedAxis = null;
+    lockedSign = 1;
+    smoothed = {x:0,y:0,z:0};
+    peakAccel = 0; peakBrake = 0;
+    startTime = null;
+    motionDetected = false;
+    clearInterval(timerInterval);
+    clearTimeout(phaseTimeout);
+    gValueEl.textContent = '0.00';
+    gValueEl.className = 'val';
+    msValueEl.textContent = '0.0';
+    peakAccelEl.textContent = '0.00';
+    peakBrakeEl.textContent = '0.00';
+    elapsedEl.textContent = '00:00.0';
+    setNeedle(0);
+    stateDot.classList.remove('live');
+    startBtn.textContent = 'Iniciar';
+    startBtn.classList.remove('stop');
+    startBtn.disabled = false;
+    resetBtn.disabled = true;
+    setStatus('Tocá "Iniciar" con el auto detenido.');
+  }
+
+  function beginZeroing(){
+    phase = 'zeroing';
+    biasSamples = [];
+    setStatus('Calibrando cero — no muevas el auto…');
+    phaseTimeout = setTimeout(() => {
+      if (biasSamples.length === 0){
+        setStatus('No se detectaron sensores de movimiento en este navegador.', true);
+        stopToIdleButKeepMessage();
+        return;
+      }
+      bias.x = biasSamples.reduce((a,s)=>a+s.x,0)/biasSamples.length;
+      bias.y = biasSamples.reduce((a,s)=>a+s.y,0)/biasSamples.length;
+      bias.z = biasSamples.reduce((a,s)=>a+s.z,0)/biasSamples.length;
+      beginAxisLock();
+    }, 1000);
+  }
+
+  function beginAxisLock(){
+    phase = 'locking';
+    axisSums = {x:0,y:0,z:0};
+    motionDetected = false;
+    setStatus('Arrancá suave para calibrar el eje de marcha (3s)…');
+    phaseTimeout = setTimeout(() => {
+      const absSums = {x:Math.abs(axisSums.x), y:Math.abs(axisSums.y), z:Math.abs(axisSums.z)};
+      const best = Object.keys(absSums).reduce((a,b)=> absSums[a] >= absSums[b] ? a : b);
+      if (!motionDetected || absSums[best] < 1.0){
+        setStatus('No detecté movimiento suficiente. Tocá "Iniciar" de nuevo y acelerá un poco.', true);
+        stopToIdleButKeepMessage();
+        return;
+      }
+      lockedAxis = best;
+      lockedSign = axisSums[best] >= 0 ? 1 : -1;
+      startRunning();
+    }, 3000);
+  }
+
+  function startRunning(){
+    phase = 'running';
+    startTime = performance.now();
+    stateDot.classList.add('live');
+    setStatus('Midiendo. Frená o acelerá con normalidad.');
+    timerInterval = setInterval(() => {
+      elapsedEl.textContent = fmtElapsed(performance.now() - startTime);
+    }, 100);
+  }
+
+  function stopToIdleButKeepMessage(){
+    clearTimeout(phaseTimeout);
+    clearInterval(timerInterval);
+    phase = 'idle';
+    startBtn.textContent = 'Iniciar';
+    startBtn.classList.remove('stop');
+    startBtn.disabled = false;
+    resetBtn.disabled = true;
+    stateDot.classList.remove('live');
+  }
+
+  function handleMotion(evt){
+    const a = evt.acceleration;
+    if (!a || a.x === null || a.x === undefined) return;
+
+    if (phase === 'zeroing'){
+      biasSamples.push({x:a.x, y:a.y, z:a.z});
+      return;
+    }
+
+    if (phase === 'locking'){
+      const dx = a.x - bias.x, dy = a.y - bias.y, dz = a.z - bias.z;
+      axisSums.x += dx; axisSums.y += dy; axisSums.z += dz;
+      if (Math.abs(dx) > 0.6 || Math.abs(dy) > 0.6 || Math.abs(dz) > 0.6) motionDetected = true;
+      return;
+    }
+
+    if (phase !== 'running') return;
+
+    const raw = { x:a.x - bias.x, y:a.y - bias.y, z:a.z - bias.z };
+    smoothed.x = ALPHA*raw.x + (1-ALPHA)*smoothed.x;
+    smoothed.y = ALPHA*raw.y + (1-ALPHA)*smoothed.y;
+    smoothed.z = ALPHA*raw.z + (1-ALPHA)*smoothed.z;
+
+    const ms2 = smoothed[lockedAxis] * lockedSign;
+    let gSigned = ms2 / G;
+
+    // deadzone: ignora ruido de vibración/motor al ralentí
+    const gDisplay = Math.abs(gSigned) < deadzone ? 0 : gSigned;
+
+    gValueEl.textContent = gDisplay.toFixed(2);
+    gValueEl.className = 'val' + (gDisplay > 0.02 ? ' pos' : (gDisplay < -0.02 ? ' neg' : ''));
+    msValueEl.textContent = (gDisplay * G).toFixed(1);
+    setNeedle(gDisplay);
+
+    if (gDisplay > peakAccel){ peakAccel = gDisplay; peakAccelEl.textContent = peakAccel.toFixed(2); }
+    if (-gDisplay > peakBrake){ peakBrake = -gDisplay; peakBrakeEl.textContent = peakBrake.toFixed(2); }
+  }
+
+  async function requestPermissionIfNeeded(){
+    if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function'){
+      try{
+        const res = await DeviceMotionEvent.requestPermission();
+        return res === 'granted';
+      }catch(e){ return false; }
+    }
+    return true;
+  }
+
+  let listenerAttached = false;
+  function attachListener(){
+    if (listenerAttached) return;
+    window.addEventListener('devicemotion', handleMotion);
+    listenerAttached = true;
+  }
+
+  startBtn.addEventListener('click', async () => {
+    if (phase === 'idle'){
+      const granted = await requestPermissionIfNeeded();
+      if (!granted){
+        setStatus('Permiso de sensores denegado. Habilitalo en la configuración del navegador.', true);
+        return;
+      }
+      attachListener();
+      startBtn.disabled = true;
+      resetBtn.disabled = false;
+      startBtn.textContent = 'Midiendo…';
+      startBtn.classList.add('stop');
+      beginZeroing();
+    }
+  });
+
+  resetBtn.addEventListener('click', resetAll);
+
+  resetAll();
+})();
+</script>
+</body>
+</html>
